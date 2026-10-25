@@ -528,6 +528,23 @@ body:not(.editing) .qt-layer { display: none !important; }
 .opt.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); }
 .opt.on.skip { border-color: var(--muted); background: var(--canvas); color: var(--ink); }
 
+/* link suggestions */
+.lk-tools { display: flex; gap: 4px; margin: -4px 0 6px; }
+.lk-tools .btn { height: 30px; padding: 0 10px; font-size: 12.5px; }
+.lk-h { display: flex; align-items: center; gap: 8px; margin: 14px 0 8px; font-size: 13px; color: var(--ink); }
+.lk-h span { font-size: 11.5px; font-weight: 700; color: var(--muted); background: var(--canvas); border-radius: 99px; padding: 1px 9px; }
+.lk-row { display: flex; gap: 12px; align-items: flex-start; padding: 11px 14px; margin-bottom: 8px; border: 1px solid var(--line); border-radius: 11px; cursor: pointer; transition: background .12s, border-color .12s; }
+.lk-row:hover { border-color: var(--accent-line); }
+.lk-row.on { background: var(--accent-soft); border-color: var(--accent-line); }
+.lk-row input { margin-top: 4px; width: 17px; height: 17px; accent-color: var(--accent); flex: none; cursor: pointer; }
+.lk-main { flex: 1; min-width: 0; }
+.lk-snip { font-size: 14px; color: var(--ink-2); line-height: 1.7; word-break: break-all; }
+.lk-snip mark { background: var(--mark); color: var(--ink); font-weight: 700; border-radius: 3px; padding: 0 2px; }
+.lk-to { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-top: 3px; font-size: 12.5px; color: var(--muted); }
+.lk-to svg { color: var(--accent); }
+.lk-to b { color: var(--accent-ink); }
+.lk-kind { margin-left: 4px; font-size: 11px; font-weight: 700; color: var(--edit-ink); background: var(--edit-soft); border-radius: 99px; padding: 1px 8px; }
+
 /* ---------- misc overlays ---------- */
 .toasts { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); z-index: 400; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
 .toast {

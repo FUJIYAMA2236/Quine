@@ -6,7 +6,7 @@ const dir = __dirname;
 const read = (f) => fs.readFileSync(path.join(dir, f), 'utf8');
 
 const css = read('style.css');
-const js = ['core.js', 'ui.js', 'tree.js', 'editor.js', 'table.js', 'image.js', 'search.js', 'io.js', 'main.js']
+const js = ['core.js', 'ui.js', 'tree.js', 'editor.js', 'table.js', 'image.js', 'search.js', 'linker.js', 'io.js', 'main.js']
   .map((f) => `// ---- ${f} ----\n` + read(f)).join('\n');
 
 if (/<\/script/i.test(js)) throw new Error('JS内に </script が含まれています');

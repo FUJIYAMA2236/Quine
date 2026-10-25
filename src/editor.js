@@ -275,7 +275,7 @@ const TB_ITEMS = [
   ['style', '段落の種類'], '|',
   ['bold', '太字 (Ctrl+B)'], ['italic', '斜体 (Ctrl+I)'], ['underline', '下線 (Ctrl+U)'], ['strike', '取り消し線'], ['color', '文字色'], '|',
   ['list', '箇条書き'], ['olist', '番号付きリスト'], ['checklist', 'チェックリスト'], '|',
-  ['link', 'リンク (Ctrl+K)'], ['quote', '引用'], ['code', 'コードブロック'], ['hr', '区切り線'], '|',
+  ['link', 'リンク (Ctrl+K)'], ['suggest', 'リンク候補を探す（ほかの記事のタイトル・見出しと同じ言葉）'], ['quote', '引用'], ['code', 'コードブロック'], ['hr', '区切り線'], '|',
   ['table', '表を挿入'], ['image', '画像を挿入'],
 ];
 const BLOCK_TOOLS = ['style', 'italic', 'underline', 'strike', 'list', 'olist', 'checklist', 'quote', 'code', 'hr', 'table', 'image'];
@@ -319,6 +319,7 @@ function tbAction(k, btn) {
     case 'olist': return toggleList('ol');
     case 'checklist': return toggleList('check');
     case 'link': return openLinkPop(btn);
+    case 'suggest': return showLinkSuggestions([S.cur], { emptyToast: true });
     case 'quote': return toggleQuote();
     case 'code': return toggleCode();
     case 'hr': return exec('insertHorizontalRule');
@@ -968,14 +969,22 @@ function requestEdit(after) {
 }
 function enterEdit() {
   S.edit = true;
+  S.sessionEdits.clear();
   document.body.classList.add('editing');
   renderAll();
 }
 function exitEdit() {
   commitEditor();
-  S.edit = false;
-  document.body.classList.remove('editing');
-  closeFloating();
-  renderAll();
-  if (S.dirty) toast('閲覧モードに戻りました。変更はまだ保存されていません', 'warn', 4500);
+  const finish = () => {
+    S.edit = false;
+    document.body.classList.remove('editing');
+    closeFloating();
+    renderAll();
+    if (S.dirty) toast('閲覧モードに戻りました。変更はまだ保存されていません', 'warn', 4500);
+  };
+  // 今回書いた記事について、ほかの記事とつながる言葉があればリンク候補を出す
+  const ids = Array.from(S.sessionEdits).filter((id) => A.has(id));
+  S.sessionEdits.clear();
+  if (ids.length) showLinkSuggestions(ids, { done: finish });
+  else finish();
 }

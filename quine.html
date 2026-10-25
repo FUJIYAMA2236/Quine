@@ -6,7 +6,7 @@
 <title>QUINE</title>
 <!--
 QUINE — QUINE Unfolds Its Nested Entries
-Copyright (C) 2026 by FUJIYAMA2236 — BSD Zero Clause License (0BSD)
+Copyright (C) 2026 by Fuji — BSD Zero Clause License (0BSD)
 Permission to use, copy, modify, and/or distribute this software for any
 purpose with or without fee is hereby granted.
 THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES.
@@ -588,6 +588,23 @@ body:not(.editing) .qt-layer { display: none !important; }
 .opt.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); }
 .opt.on.skip { border-color: var(--muted); background: var(--canvas); color: var(--ink); }
 
+/* link suggestions */
+.lk-tools { display: flex; gap: 4px; margin: -4px 0 6px; }
+.lk-tools .btn { height: 30px; padding: 0 10px; font-size: 12.5px; }
+.lk-h { display: flex; align-items: center; gap: 8px; margin: 14px 0 8px; font-size: 13px; color: var(--ink); }
+.lk-h span { font-size: 11.5px; font-weight: 700; color: var(--muted); background: var(--canvas); border-radius: 99px; padding: 1px 9px; }
+.lk-row { display: flex; gap: 12px; align-items: flex-start; padding: 11px 14px; margin-bottom: 8px; border: 1px solid var(--line); border-radius: 11px; cursor: pointer; transition: background .12s, border-color .12s; }
+.lk-row:hover { border-color: var(--accent-line); }
+.lk-row.on { background: var(--accent-soft); border-color: var(--accent-line); }
+.lk-row input { margin-top: 4px; width: 17px; height: 17px; accent-color: var(--accent); flex: none; cursor: pointer; }
+.lk-main { flex: 1; min-width: 0; }
+.lk-snip { font-size: 14px; color: var(--ink-2); line-height: 1.7; word-break: break-all; }
+.lk-snip mark { background: var(--mark); color: var(--ink); font-weight: 700; border-radius: 3px; padding: 0 2px; }
+.lk-to { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-top: 3px; font-size: 12.5px; color: var(--muted); }
+.lk-to svg { color: var(--accent); }
+.lk-to b { color: var(--accent-ink); }
+.lk-kind { margin-left: 4px; font-size: 11px; font-weight: 700; color: var(--edit-ink); background: var(--edit-soft); border-radius: 99px; padding: 1px 8px; }
+
 /* ---------- misc overlays ---------- */
 .toasts { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); z-index: 400; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
 .toast {
@@ -734,6 +751,8 @@ const S = {
   edit: false,
   dirty: false,
   touched: new Set(),
+  sessionEdits: new Set(),
+  linking: false,
   expanded: new Set(),
   search: { q: '', terms: [], hits: new Set(), ctx: new Set(), marks: [], idx: 0 },
 };
@@ -758,10 +777,14 @@ const WELCOME_BODY = [
   '<li>編集を始めるとき、ファイルの最新版を自動で読み込み直します。他の人の変更を消さないための仕組みです。</li>',
   '<li>文字の装飾や表・画像は、本文の上に出るツールバーから入れられます。画像は貼り付け（Ctrl+V）やドラッグでも入ります。</li>',
   '<li>記事の追加・削除・並べ替えは、ツリーの「…」メニューやドラッグで行えます。</li></ul>',
-  '<h2>保存する</h2>',
+  '<h2>保存する（いちばん大事）</h2>',
+  '<p>このファイルは、記事を<strong>自分自身の中に</strong>しまっています。「保存」を押すと、新しい記事を詰め込んだ<strong>このファイルの新しい版がまるごとダウンロード</strong>されます。それで元のファイルを上書きして、はじめて保存が終わります。</p>',
   '<ol><li>右上の <strong>「保存」</strong>（または Ctrl+S）を押します。</li>',
-  '<li>保存ダイアログが開いたら、<strong>いま開いているこのファイル</strong> を選んで上書きします。</li>',
-  '<li>上書きしないと変更は残りません。画面上部に「未保存」と出ている間は、まだ保存されていません。</li></ol>',
+  '<li>保存の画面が開いたら、<strong>いま開いているこのファイル</strong>（同じ場所・同じ名前）を選んで上書きします。</li>',
+  '<li>「置き換えますか？」と聞かれたら「はい」を押します。</li></ol>',
+  '<ul><li>ダウンロードフォルダなど<strong>別の場所や別の名前で保存すると、別のWikiになってしまいます</strong>。ほかの人には届きません。</li>',
+  '<li>保存の画面で「キャンセル」すると、何も保存されません。「未保存」の表示が消えても、もう一度「保存」を押してください。</li>',
+  '<li>画面上部に「未保存」と出ている間は、まだ保存されていません。</li></ul>',
   '<blockquote><p>同じファイルを2人が同時に編集すると、後から保存した方で上書きされます。編集は短い時間で区切り、こまめに保存しましょう。</p></blockquote>',
   '<h2>はじめの一歩</h2>',
   '<ul class="checklist"><li data-checked="true">この記事を読む</li><li data-checked="false">「編集」を押して、この記事を書き換えてみる</li><li data-checked="false">保存して、ファイルを上書きする</li></ul>',
@@ -844,6 +867,8 @@ function crumbText(id) { return ancestors(id).map((a) => a.title || '無題').jo
 // ---------- dirty state ----------
 function touch(id) {
   if (id) S.touched.add(id);
+  // 今回の編集で書き換えた記事（「編集を終える」でリンク候補を探す対象）。リンク付けによる変更は数えない
+  if (id && S.edit && !S.linking) S.sessionEdits.add(id);
   setDirty(true);
 }
 function setDirty(v) {
@@ -915,6 +940,7 @@ const ICONS = {
   olist: '<path d="M11 6h9M11 12h9M11 18h9"/><path d="M4.5 4.5h1.3V9M4.3 9h3M4.3 14.6c.4-.8 2.8-1 2.8.6 0 1.2-2.8 1.9-2.8 3.3h3"/>',
   checklist: '<rect x="3.5" y="4" width="6" height="6" rx="1.5"/><path d="m4.8 16.8 1.6 1.6 3-3.2M13 7h8M13 17h8"/>',
   link: '<path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/>',
+  suggest: '<path d="M10 14a4.5 4.5 0 0 0 6.4 0l2-2a4.5 4.5 0 0 0-6.4-6.4l-.6.6"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-2 2a4.5 4.5 0 0 0 6.4 6.4l.6-.6"/><path d="M19 2.5v4M17 4.5h4"/>',
   unlink: '<path d="m18.8 13.7 1-1a4.5 4.5 0 0 0-6.4-6.4l-1 1M5.2 10.3l-1 1a4.5 4.5 0 0 0 6.4 6.4l1-1M8 2v3M2 8h3M16 22v-3M22 16h-3"/>',
   quote: '<path d="M4 11h5v6H4zM4 11c0-3 1.5-5 4-6M14 11h5v6h-5zM14 11c0-3 1.5-5 4-6"/>',
   code: '<path d="m8 8-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14"/>',
@@ -1647,7 +1673,7 @@ const TB_ITEMS = [
   ['style', '段落の種類'], '|',
   ['bold', '太字 (Ctrl+B)'], ['italic', '斜体 (Ctrl+I)'], ['underline', '下線 (Ctrl+U)'], ['strike', '取り消し線'], ['color', '文字色'], '|',
   ['list', '箇条書き'], ['olist', '番号付きリスト'], ['checklist', 'チェックリスト'], '|',
-  ['link', 'リンク (Ctrl+K)'], ['quote', '引用'], ['code', 'コードブロック'], ['hr', '区切り線'], '|',
+  ['link', 'リンク (Ctrl+K)'], ['suggest', 'リンク候補を探す（ほかの記事のタイトル・見出しと同じ言葉）'], ['quote', '引用'], ['code', 'コードブロック'], ['hr', '区切り線'], '|',
   ['table', '表を挿入'], ['image', '画像を挿入'],
 ];
 const BLOCK_TOOLS = ['style', 'italic', 'underline', 'strike', 'list', 'olist', 'checklist', 'quote', 'code', 'hr', 'table', 'image'];
@@ -1691,6 +1717,7 @@ function tbAction(k, btn) {
     case 'olist': return toggleList('ol');
     case 'checklist': return toggleList('check');
     case 'link': return openLinkPop(btn);
+    case 'suggest': return showLinkSuggestions([S.cur], { emptyToast: true });
     case 'quote': return toggleQuote();
     case 'code': return toggleCode();
     case 'hr': return exec('insertHorizontalRule');
@@ -2340,16 +2367,24 @@ function requestEdit(after) {
 }
 function enterEdit() {
   S.edit = true;
+  S.sessionEdits.clear();
   document.body.classList.add('editing');
   renderAll();
 }
 function exitEdit() {
   commitEditor();
-  S.edit = false;
-  document.body.classList.remove('editing');
-  closeFloating();
-  renderAll();
-  if (S.dirty) toast('閲覧モードに戻りました。変更はまだ保存されていません', 'warn', 4500);
+  const finish = () => {
+    S.edit = false;
+    document.body.classList.remove('editing');
+    closeFloating();
+    renderAll();
+    if (S.dirty) toast('閲覧モードに戻りました。変更はまだ保存されていません', 'warn', 4500);
+  };
+  // 今回書いた記事について、ほかの記事とつながる言葉があればリンク候補を出す
+  const ids = Array.from(S.sessionEdits).filter((id) => A.has(id));
+  S.sessionEdits.clear();
+  if (ids.length) showLinkSuggestions(ids, { done: finish });
+  else finish();
 }
 
 // ---- table.js ----
@@ -3395,6 +3430,215 @@ function bindSearch() {
     else if (b.dataset.hb === 'prev') hitStep(-1);
     else clearSearch();
   });
+}
+
+// ---- linker.js ----
+// ---------- link suggestions（ほかの記事のタイトル・見出しと同じ言葉をリンク候補にする） ----------
+// 方向は2つ：
+//   出ていくリンク … 書いた記事の中の言葉 → その言葉がタイトル・見出しになっている記事へ
+//   入ってくるリンク … ほかの記事の中の言葉 → 書いた記事（タイトル・見出し）へ
+// 1つの記事につき、同じリンク先へは最初の1か所だけを候補にする（すでにリンクがあれば出さない）。
+
+const LINK_SKIP = 'a,h1,h2,h3,pre,code';
+const MIN_TERM = 2;
+
+const headingCache = new Map();
+function articleHeadings(a) {
+  const c = headingCache.get(a.id);
+  if (c && c.body === a.body) return c.list;
+  const d = new DOMParser().parseFromString(a.body || '', 'text/html');
+  const list = $$('h1,h2,h3', d).map((h) => h.textContent.replace(/\s+/g, ' ').trim()).filter((t) => t.length <= 60);
+  headingCache.set(a.id, { body: a.body, list });
+  return list;
+}
+
+// 記事 a を指す言葉の一覧（タイトル → 見出しの順）
+function termsOf(a) {
+  const out = [];
+  const add = (text, kind) => {
+    const t = (text || '').trim();
+    const n = norm(t);
+    if (n.length < MIN_TERM || out.some((x) => x.n === n)) return;
+    out.push({ text: t, n, targetId: a.id, kind, ascii: /^[\x20-\x7e]+$/.test(n) });
+  };
+  add(a.title, 'title');
+  for (const h of articleHeadings(a)) add(h, 'heading');
+  return out;
+}
+
+// root（記事本文のDOM）の中から terms の出現を探す。リンク先ごとに最初の1か所だけ。
+function findLinkSpots(root, terms, selfId) {
+  const linked = new Set($$('a[href^="#"]', root).map((x) => decodeURIComponent(x.getAttribute('href').slice(1))));
+  const usable = terms.filter((t) => t.targetId !== selfId && !linked.has(t.targetId));
+  if (!usable.length) return [];
+  const hits = [];
+  const tw = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let order = 0;
+  while (tw.nextNode()) {
+    const node = tw.currentNode;
+    if (!node.data.trim() || (node.parentNode.closest && node.parentNode.closest(LINK_SKIP))) continue;
+    const { n, map } = normMap(node.data);
+    for (const t of usable) {
+      let p = n.indexOf(t.n);
+      while (p >= 0) {
+        const start = map[p], end = map[p + t.n.length];
+        const before = node.data[start - 1] || '', after = node.data[end] || '';
+        // 英数字だけの言葉は、単語の途中に当たったものを除く（"IT" が "EDIT" に当たらないように）
+        if (!t.ascii || (!/[A-Za-z0-9]/.test(before) && !/[A-Za-z0-9]/.test(after))) {
+          hits.push({ node, start, end, term: t, order: order * 100000 + start });
+          break;
+        }
+        p = n.indexOf(t.n, p + 1);
+      }
+    }
+    order++;
+  }
+  // 重なったら長い言葉を優先、同じリンク先は最初の1か所だけ
+  hits.sort((x, y) => (y.end - y.start) - (x.end - x.start) || x.order - y.order);
+  const chosen = [], taken = new Set();
+  for (const h of hits) {
+    if (taken.has(h.term.targetId)) continue;
+    if (chosen.some((c) => c.node === h.node && h.start < c.end && c.start < h.end)) continue;
+    chosen.push(h);
+    taken.add(h.term.targetId);
+  }
+  return chosen.sort((x, y) => x.order - y.order);
+}
+
+function snippetOf(node, start, end) {
+  const s = node.data;
+  const a = Math.max(0, start - 24), b = Math.min(s.length, end + 24);
+  return (a > 0 ? '…' : '') + esc(s.slice(a, start)) + '<mark>' + esc(s.slice(start, end)) + '</mark>' + esc(s.slice(end, b)) + (b < s.length ? '…' : '');
+}
+
+// ids の記事について、出ていく・入ってくる両方の候補を集める
+function collectLinkCandidates(ids) {
+  commitEditor();
+  const roots = new Map();
+  const rootOf = (id) => {
+    if (!roots.has(id)) { const d = document.createElement('div'); d.innerHTML = A.get(id).body || ''; roots.set(id, d); }
+    return roots.get(id);
+  };
+  const allTerms = Array.from(A.values()).flatMap(termsOf);
+  const cands = [];
+  const seen = new Set();
+  const push = (dir, hostId, spot) => {
+    const key = hostId + '>' + spot.term.targetId;
+    if (seen.has(key)) return;
+    seen.add(key);
+    cands.push({ dir, hostId, targetId: spot.term.targetId, term: spot.term, node: spot.node, start: spot.start, end: spot.end, snippet: snippetOf(spot.node, spot.start, spot.end), on: spot.term.kind === 'title' });
+  };
+  for (const id of ids) {
+    const a = A.get(id);
+    if (!a) continue;
+    // 出ていく：この記事の中の言葉 → ほかの記事
+    for (const spot of findLinkSpots(rootOf(id), allTerms, id)) push('out', id, spot);
+    // 入ってくる：ほかの記事の中の言葉 → この記事
+    const mine = termsOf(a);
+    if (!mine.length) continue;
+    for (const b of A.values()) {
+      if (b.id === id) continue;
+      for (const spot of findLinkSpots(rootOf(b.id), mine, b.id)) push('in', b.id, spot);
+    }
+  }
+  return { cands, roots };
+}
+
+function applyLinkCandidates(chosen, roots) {
+  S.linking = true;
+  try { return applyLinks(chosen, roots); } finally { S.linking = false; }
+}
+function applyLinks(chosen, roots) {
+  const byNode = new Map();
+  for (const c of chosen) { if (!byNode.has(c.node)) byNode.set(c.node, []); byNode.get(c.node).push(c); }
+  const hosts = new Set();
+  for (const [node, list] of byNode) {
+    list.sort((x, y) => y.start - x.start); // 後ろから包むと前の位置がずれない
+    for (const c of list) {
+      const mid = node.splitText(c.start);
+      mid.splitText(c.end - c.start);
+      const a = document.createElement('a');
+      a.setAttribute('href', '#' + c.targetId);
+      mid.replaceWith(a);
+      a.appendChild(mid);
+      hosts.add(c.hostId);
+    }
+  }
+  for (const id of hosts) {
+    const art = A.get(id);
+    const html = roots.get(id).innerHTML;
+    art.body = html;
+    touch(id);
+    if (S.edit && id === S.cur) {
+      // 編集中の記事は、元に戻す（Ctrl+Z）で取り消せるように履歴に積んで差し替える
+      edit(() => { ed.innerHTML = html; hydrate(ed); markBrokenLinks(ed); });
+      baseline = serializeBody();
+    }
+  }
+  if (!S.edit && hosts.has(S.cur)) renderArticle();
+  renderMeta();
+  return hosts.size;
+}
+
+// 候補を選ぶ画面。done(added) は閉じたあとに呼ばれる
+function showLinkSuggestions(ids, { done, emptyToast = false } = {}) {
+  const { cands, roots } = collectLinkCandidates(ids);
+  if (!cands.length) {
+    if (emptyToast) toast('リンクできそうな言葉は見つかりませんでした');
+    done && done(0);
+    return;
+  }
+  const box = document.createElement('div');
+  const titleOf = (id) => esc(A.get(id).title || '無題の記事');
+  const row = (c, i) => `<label class="lk-row ${c.on ? 'on' : ''}" data-i="${i}">
+      <input type="checkbox" ${c.on ? 'checked' : ''}>
+      <div class="lk-main">
+        <div class="lk-snip">${c.snippet}</div>
+        <div class="lk-to">${c.dir === 'in' ? `記事「${titleOf(c.hostId)}」の中 ・ ` : ''}${ic('link', 'xs')}<b>${titleOf(c.targetId)}</b> へリンク
+          <span class="lk-kind">${c.term.kind === 'title' ? 'タイトルと一致' : '見出し「' + esc(c.term.text) + '」と一致'}</span></div>
+      </div></label>`;
+  const outs = cands.map((c, i) => [c, i]).filter(([c]) => c.dir === 'out');
+  const ins = cands.map((c, i) => [c, i]).filter(([c]) => c.dir === 'in');
+  const one = ids.length === 1 ? `「${titleOf(ids[0])}」` : '書いた記事';
+  box.innerHTML = `<p>ほかの記事のタイトルや見出しと同じ言葉が見つかりました。リンクにしたいものにチェックを入れてください。リンクにすると、クリックでその記事へ移動できます。</p>
+    <div class="lk-tools"><button class="btn ghost" data-all="1">${ic('check', 'sm')}すべて選ぶ</button><button class="btn ghost" data-all="0">${ic('x', 'sm')}すべて外す</button></div>
+    ${outs.length ? `<h4 class="lk-h">${one}の中の言葉 → ほかの記事へ <span>${outs.length}件</span></h4>${outs.map(([c, i]) => row(c, i)).join('')}` : ''}
+    ${ins.length ? `<h4 class="lk-h">ほかの記事の中の言葉 → ${one}へ <span>${ins.length}件</span></h4>${ins.map(([c, i]) => row(c, i)).join('')}` : ''}`;
+  let modal;
+  const refresh = () => {
+    $$('.lk-row', box).forEach((el) => { const c = cands[+el.dataset.i]; c.on = el.querySelector('input').checked; el.classList.toggle('on', c.on); });
+    const n = cands.filter((c) => c.on).length;
+    const b = modal.actions[1].el;
+    b.disabled = !n;
+    b.textContent = n ? `選んだ${n}件をリンクする` : 'リンクする候補を選んでください';
+  };
+  box.addEventListener('change', refresh);
+  box.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-all]');
+    if (!b) return;
+    $$('.lk-row input', box).forEach((x) => { x.checked = b.dataset.all === '1'; });
+    refresh();
+  });
+  let finished = false;
+  const finish = (n) => { if (finished) return; finished = true; done && done(n); };
+  modal = openModal({
+    title: 'リンクの候補', icon: 'link', wide: true, body: box,
+    actions: [
+      { label: 'リンクしない', onClick: () => finish(0) },
+      {
+        label: 'リンクする', primary: true, onClick: () => {
+          const chosen = cands.filter((c) => c.on);
+          const n = applyLinkCandidates(chosen, roots);
+          toast(`${chosen.length}件のリンクを追加しました（${n}記事・未保存）`, 'ok');
+          finish(chosen.length);
+        },
+      },
+    ],
+  });
+  // Esc や背景クリックで閉じたときも続きの処理を進める
+  const obs = new MutationObserver(() => { if (!document.body.contains(box)) { obs.disconnect(); finish(0); } });
+  obs.observe(document.body, { childList: true });
+  refresh();
 }
 
 // ---- io.js ----

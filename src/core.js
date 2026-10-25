@@ -79,6 +79,8 @@ const S = {
   edit: false,
   dirty: false,
   touched: new Set(),
+  sessionEdits: new Set(),
+  linking: false,
   expanded: new Set(),
   search: { q: '', terms: [], hits: new Set(), ctx: new Set(), marks: [], idx: 0 },
 };
@@ -103,10 +105,14 @@ const WELCOME_BODY = [
   '<li>編集を始めるとき、ファイルの最新版を自動で読み込み直します。他の人の変更を消さないための仕組みです。</li>',
   '<li>文字の装飾や表・画像は、本文の上に出るツールバーから入れられます。画像は貼り付け（Ctrl+V）やドラッグでも入ります。</li>',
   '<li>記事の追加・削除・並べ替えは、ツリーの「…」メニューやドラッグで行えます。</li></ul>',
-  '<h2>保存する</h2>',
+  '<h2>保存する（いちばん大事）</h2>',
+  '<p>このファイルは、記事を<strong>自分自身の中に</strong>しまっています。「保存」を押すと、新しい記事を詰め込んだ<strong>このファイルの新しい版がまるごとダウンロード</strong>されます。それで元のファイルを上書きして、はじめて保存が終わります。</p>',
   '<ol><li>右上の <strong>「保存」</strong>（または Ctrl+S）を押します。</li>',
-  '<li>保存ダイアログが開いたら、<strong>いま開いているこのファイル</strong> を選んで上書きします。</li>',
-  '<li>上書きしないと変更は残りません。画面上部に「未保存」と出ている間は、まだ保存されていません。</li></ol>',
+  '<li>保存の画面が開いたら、<strong>いま開いているこのファイル</strong>（同じ場所・同じ名前）を選んで上書きします。</li>',
+  '<li>「置き換えますか？」と聞かれたら「はい」を押します。</li></ol>',
+  '<ul><li>ダウンロードフォルダなど<strong>別の場所や別の名前で保存すると、別のWikiになってしまいます</strong>。ほかの人には届きません。</li>',
+  '<li>保存の画面で「キャンセル」すると、何も保存されません。「未保存」の表示が消えても、もう一度「保存」を押してください。</li>',
+  '<li>画面上部に「未保存」と出ている間は、まだ保存されていません。</li></ul>',
   '<blockquote><p>同じファイルを2人が同時に編集すると、後から保存した方で上書きされます。編集は短い時間で区切り、こまめに保存しましょう。</p></blockquote>',
   '<h2>はじめの一歩</h2>',
   '<ul class="checklist"><li data-checked="true">この記事を読む</li><li data-checked="false">「編集」を押して、この記事を書き換えてみる</li><li data-checked="false">保存して、ファイルを上書きする</li></ul>',
@@ -189,6 +195,8 @@ function crumbText(id) { return ancestors(id).map((a) => a.title || '無題').jo
 // ---------- dirty state ----------
 function touch(id) {
   if (id) S.touched.add(id);
+  // 今回の編集で書き換えた記事（「編集を終える」でリンク候補を探す対象）。リンク付けによる変更は数えない
+  if (id && S.edit && !S.linking) S.sessionEdits.add(id);
   setDirty(true);
 }
 function setDirty(v) {
