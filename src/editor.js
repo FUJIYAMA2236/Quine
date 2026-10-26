@@ -53,7 +53,8 @@ function renderArticle() {
   }
   titleEl.textContent = a.title;
   titleEl.contentEditable = S.edit ? 'plaintext-only' : 'false';
-  ed.innerHTML = a.body || '<p><br></p>';
+  // 表示する前に必ず無害化する（ファイルに危険なHTMLが紛れ込んでいても動かないように）
+  ed.innerHTML = sanitizeHTML(a.body || '') || '<p><br></p>';
   hydrate(ed);
   markBrokenLinks(ed);
   if (S.edit) {
@@ -903,7 +904,7 @@ function bindEditor() {
       if (href.startsWith('#')) {
         const id = decodeURIComponent(href.slice(1));
         if (A.has(id)) go(id); else toast('リンク先の記事は削除されています', 'warn');
-      } else window.open(href, '_blank', 'noopener');
+      } else openExternalLink(href);
       return;
     }
     const img = e.target.closest('img[data-img]');
@@ -964,7 +965,7 @@ function requestEdit(after) {
       return;
     }
     setIntent({ id: S.cur, t: Date.now(), top: $('.content').scrollTop, after: after ? after.name || '' : '' });
-    location.reload();
+    stashKeyForReload().finally(() => location.reload());
   });
 }
 function enterEdit() {

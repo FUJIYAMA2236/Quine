@@ -9,7 +9,7 @@ const TEMPLATE = (() => {
   return '<!DOCTYPE html>\n' + root.outerHTML;
 })();
 
-const APP_VERSION = '1.0';
+const APP_VERSION = '1.1';
 const DATA_VERSION = 1;
 
 // ---------- small helpers ----------
@@ -119,20 +119,17 @@ const WELCOME_BODY = [
   '<p>この記事は不要になったら削除してかまいません。</p>',
 ].join('');
 
-function loadData() {
-  let raw = {};
-  try { raw = JSON.parse($('#wiki-data').textContent || '{}'); } catch (e) { console.error(e); raw = {}; }
-  if (!raw.meta || !Array.isArray(raw.articles)) raw = starterData('新しいWiki', '00000000-0000-4000-8000-000000000001');
-  db = { meta: raw.meta, images: null };
-  IMG = raw.images || {};
+// data は validateData() で検証・整形ずみのもの
+function loadData(data) {
+  db = { meta: data.meta };
+  IMG = data.images;
   A.clear();
-  for (const a of raw.articles) A.set(a.id, a);
-  if (!db.meta.name) db.meta.name = '新しいWiki';
+  for (const a of data.articles) A.set(a.id, a);
 }
 
 function dataObject() {
   return {
-    meta: { name: db.meta.name, version: DATA_VERSION, savedAt: db.meta.savedAt, app: APP_VERSION },
+    meta: { name: db.meta.name, version: DATA_VERSION, savedAt: db.meta.savedAt, app: APP_VERSION, trustedHosts: db.meta.trustedHosts || [] },
     articles: Array.from(A.values()).map(cleanArticle),
     images: IMG,
   };
@@ -220,7 +217,7 @@ function gcImages() {
   for (const k of Object.keys(IMG)) if (!used.has(k)) delete IMG[k];
 }
 
-function save() {
+async function save() {
   commitEditor();
   const name = userName() || '名前未設定';
   const t = nowISO();
@@ -231,7 +228,11 @@ function save() {
   }
   gcImages();
   db.meta.savedAt = t;
-  const html = buildHTML(dataObject());
+  let payload = dataObject();
+  if (CRYPT) {
+    try { payload = await encryptPayload(payload); } catch (e) { toast('暗号化できなかったため、保存を中止しました', 'warn', 6000); return; }
+  }
+  const html = buildHTML(payload);
   download(html, currentFileName());
   S.touched.clear();
   setDirty(false);

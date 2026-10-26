@@ -81,7 +81,8 @@ function collectLinkCandidates(ids) {
   commitEditor();
   const roots = new Map();
   const rootOf = (id) => {
-    if (!roots.has(id)) { const d = document.createElement('div'); d.innerHTML = A.get(id).body || ''; roots.set(id, d); }
+    // 別の文書として読み込む（この画面の中で組み立てると、画像の読み込みなどが動いてしまうため）
+    if (!roots.has(id)) roots.set(id, new DOMParser().parseFromString(A.get(id).body || '', 'text/html').body);
     return roots.get(id);
   };
   const allTerms = Array.from(A.values()).flatMap(termsOf);

@@ -69,8 +69,17 @@ function bindGlobal() {
 }
 
 // ---------- boot ----------
-function boot() {
-  loadData();
+async function boot() {
+  // 埋め込みデータを読み、検証してから画面を作る。壊れていたら編集画面は出さない
+  const raw = readEmbedded();
+  if (raw.error) { showBroken([raw.error]); return; }
+  let data = raw.empty ? starterData('新しいWiki', '00000000-0000-4000-8000-000000000001') : raw.value;
+  if (isEnvelope(data)) {
+    try { data = await unlockData(data); } catch (e) { showBroken([e.message]); return; }
+  }
+  const v = validateData(data);
+  if (!v.ok) { showBroken(v.errors); return; }
+  loadData(v.data);
   buildShell();
   buildToolbar();
   bindEditor();
@@ -98,6 +107,7 @@ function boot() {
     else toast('ファイルの最新版を読み込みました。編集できます', 'ok');
   }
   if ((db.meta.version || 1) > DATA_VERSION) toast('このファイルは新しい版のQUINEで作られています。一部が正しく表示されない可能性があります', 'warn', 8000);
+  for (const w of v.warnings) toast(w + '（保存すると直ります）', 'warn', 8000);
 }
 
 boot();
